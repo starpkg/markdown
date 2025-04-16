@@ -51,6 +51,8 @@ Visit https://example.com
 
     # Basic conversion
     html = convert(text=md)
+    print("="*50)
+    print(html)
 
     # Verify basic conversion includes expected elements
     has_heading = "<h1" in html
@@ -71,6 +73,8 @@ Visit https://example.com
 
     # Use the custom converter
     minimal_html = minimal_converter(md)
+    print("="*50)
+    print(minimal_html)
 
     # Verify minimal conversion excludes disabled elements
     has_heading = "<h1" in minimal_html  # should still have headings
