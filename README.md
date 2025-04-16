@@ -14,8 +14,11 @@ A simple and powerful Starlark module for converting Markdown to HTML. Built on 
   - Footnotes
   - Definition lists
   - Typography enhancements
+  - Emoji support (GitHub style emojis like `:smile:`)
 - Auto heading ID generation
-- Configurable HTML rendering options
+- Configurable HTML rendering options:
+  - Hard wraps (convert newlines to `<br>` tags)
+  - Allow unsafe HTML
 - Create custom converters with preset options
 
 ## Installation
@@ -42,9 +45,10 @@ func main() {
 	mod := markdown.NewModule()
 
 	// Create a Starlet interpreter with the module
-	interpreter := starlet.New(
-		starlet.WithModuleLoader("markdown", mod.LoadModule()),
-	)
+	lazyLoaders := starlet.ModuleLoaderMap{
+		"markdown": mod.LoadModule(),
+	}
+	interpreter := starlet.NewWithLoaders(nil, nil, lazyLoaders)
 
 	// Run a Starlark script that uses markdown
 	script := `
@@ -66,11 +70,11 @@ This is a **bold** statement and *italicized* text.
 
 ## Code
 
-```go
+` + "```" + `go
 func main() {
     fmt.Println("Hello, World!")
 }
-```
+` + "```" + `
 
 ## Tables
 
@@ -78,10 +82,13 @@ func main() {
 |------|-----|------------|
 | Alice | 28 | Engineer |
 | Bob | 32 | Designer |
+
+## Emojis
+I :heart: Markdown! :tada:
 """
 
-# Convert markdown to HTML
-html = convert(text=md)
+# Convert markdown to HTML with emoji support
+html = convert(text=md, emoji=True)
 print(html)
 
 # Convert with custom options
@@ -90,7 +97,7 @@ print("HTML without tables:", html_no_tables)
 `
 
 	// Execute the script
-	if err := interpreter.ExecScript("example.star", script); err != nil {
+	if _, err := interpreter.RunScript([]byte(script), nil); err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
@@ -101,7 +108,7 @@ print("HTML without tables:", html_no_tables)
 
 ### Functions
 
-#### `convert(text, unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?)`
+#### `convert(text, unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
 
 Converts Markdown text to HTML. Parameters:
 
@@ -115,10 +122,12 @@ Converts Markdown text to HTML. Parameters:
 - `footnote`: Enable footnote support (default: false)
 - `definition`: Enable definition list support (default: false)
 - `typograph`: Enable typographer extension (default: false)
+- `emoji`: Enable emoji support for GitHub-style emojis like `:smile:` (default: false)
+- `hard_wraps`: Convert newlines to `<br>` tags (default: false)
 
 Returns the HTML result as a string.
 
-#### `with_options(unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?)`
+#### `with_options(unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
 
 Creates a configured converter function with preset options. Parameters are the same as `convert()`, but without the `text` parameter.
 
@@ -165,6 +174,8 @@ markdown_text = '''
 Visit https://example.com for more information.
 
 ~~Strikethrough text~~
+
+I :heart: Markdown! :tada:
 '''
 
 html = convert(
@@ -172,9 +183,31 @@ html = convert(
     task_list=True,
     table=True,
     strikethrough=True,
-    linkify=True
+    linkify=True,
+    emoji=True
 )
 print(html)
+```
+
+### Hard Wraps Example
+
+```python
+load("markdown", "convert")
+
+# Markdown with line breaks
+markdown_text = '''
+First line
+Second line
+Third line
+'''
+
+# With hard wraps (newlines become <br> tags)
+html_hard_wraps = convert(text=markdown_text, hard_wraps=True)
+print(html_hard_wraps)
+
+# Without hard wraps (default)
+html_normal = convert(text=markdown_text)
+print(html_normal)
 ```
 
 ### Creating a Custom Converter
@@ -186,7 +219,9 @@ load("markdown", "with_options")
 basic_converter = with_options(
     unsafe=False,
     table=False,
-    strikethrough=False
+    strikethrough=False,
+    emoji=True,
+    hard_wraps=True
 )
 
 markdown_text = '''
@@ -199,6 +234,10 @@ markdown_text = '''
 | Key1 | Val1  |
 
 ~~Strikethrough~~
+
+I :heart: Markdown!
+First line
+Second line
 '''
 
 # Use the custom converter
@@ -217,6 +256,8 @@ The `markdown` module supports all CommonMark syntax, plus the following extensi
 - **Footnotes** - Add footnotes with `[^1]` and `[^1]: explanation`
 - **Definition Lists** - Create definition lists with term and description
 - **Typography** - Smart quotes, dashes, ellipses, etc.
+- **Emojis** - GitHub-style emojis like `:smile:` and `:heart:`
+- **Hard Wraps** - Converting newlines to `<br>` tags
 
 ## License
 

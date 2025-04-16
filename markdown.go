@@ -9,6 +9,7 @@ import (
 	"github.com/1set/starlet/dataconv/types"
 	"github.com/starpkg/base"
 	"github.com/yuin/goldmark"
+	emoji "github.com/yuin/goldmark-emoji"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
@@ -71,6 +72,8 @@ func (m *Module) genConvertFunc() starlark.Callable {
 			enableFootnote   = starlark.Bool(false)
 			enableDefinition = starlark.Bool(false)
 			enableTypograph  = starlark.Bool(false)
+			enableEmoji      = starlark.Bool(false)
+			hardWraps        = starlark.Bool(false)
 		)
 
 		if err := starlark.UnpackArgs(b.Name(), args, kwargs,
@@ -84,6 +87,8 @@ func (m *Module) genConvertFunc() starlark.Callable {
 			"footnote?", &enableFootnote,
 			"definition?", &enableDefinition,
 			"typograph?", &enableTypograph,
+			"emoji?", &enableEmoji,
+			"hard_wraps?", &hardWraps,
 		); err != nil {
 			return none, err
 		}
@@ -95,6 +100,9 @@ func (m *Module) genConvertFunc() starlark.Callable {
 		rendererOptions := []renderer.Option{}
 		if isTruthy(unsafe) {
 			rendererOptions = append(rendererOptions, html.WithUnsafe())
+		}
+		if isTruthy(hardWraps) {
+			rendererOptions = append(rendererOptions, html.WithHardWraps())
 		}
 		if len(rendererOptions) > 0 {
 			mdOptions = append(mdOptions, goldmark.WithRendererOptions(rendererOptions...))
@@ -132,6 +140,9 @@ func (m *Module) genConvertFunc() starlark.Callable {
 		if isTruthy(enableTypograph) {
 			extensions = append(extensions, extension.Typographer)
 		}
+		if isTruthy(enableEmoji) {
+			extensions = append(extensions, emoji.Emoji)
+		}
 
 		if len(extensions) > 0 {
 			mdOptions = append(mdOptions, goldmark.WithExtensions(extensions...))
@@ -163,6 +174,8 @@ func (m *Module) genWithOptionsFunc() starlark.Callable {
 			enableFootnote   starlark.Value = starlark.Bool(false)
 			enableDefinition starlark.Value = starlark.Bool(false)
 			enableTypograph  starlark.Value = starlark.Bool(false)
+			enableEmoji      starlark.Value = starlark.Bool(false)
+			hardWraps        starlark.Value = starlark.Bool(false)
 		)
 
 		if err := starlark.UnpackArgs(b.Name(), args, kwargs,
@@ -175,6 +188,8 @@ func (m *Module) genWithOptionsFunc() starlark.Callable {
 			"footnote?", &enableFootnote,
 			"definition?", &enableDefinition,
 			"typograph?", &enableTypograph,
+			"emoji?", &enableEmoji,
+			"hard_wraps?", &hardWraps,
 		); err != nil {
 			return none, err
 		}
@@ -193,6 +208,9 @@ func (m *Module) genWithOptionsFunc() starlark.Callable {
 			rendererOptions := []renderer.Option{}
 			if isTruthy(unsafe) {
 				rendererOptions = append(rendererOptions, html.WithUnsafe())
+			}
+			if isTruthy(hardWraps) {
+				rendererOptions = append(rendererOptions, html.WithHardWraps())
 			}
 			if len(rendererOptions) > 0 {
 				mdOptions = append(mdOptions, goldmark.WithRendererOptions(rendererOptions...))
@@ -229,6 +247,9 @@ func (m *Module) genWithOptionsFunc() starlark.Callable {
 			}
 			if isTruthy(enableTypograph) {
 				extensions = append(extensions, extension.Typographer)
+			}
+			if isTruthy(enableEmoji) {
+				extensions = append(extensions, emoji.Emoji)
 			}
 
 			if len(extensions) > 0 {

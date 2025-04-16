@@ -89,6 +89,39 @@ Visit https://example.com
         
     if has_table:
         fail("Minimal conversion should not include tables")
+    
+    # Test emoji support
+    emoji_md = "I :heart: markdown! :tada: :smile:"
+    emoji_html = convert(text=emoji_md, emoji=True)
+    print("="*50)
+    print(emoji_html)
+    
+    has_emoji = "❤️" in emoji_html or "&#x2764;" in emoji_html
+    if not has_emoji:
+        fail("Emoji conversion failed to render the heart emoji")
+    
+    # Test hard wraps
+    hard_wraps_md = """Line one
+Line two"""
+    
+    # Without hard wraps (default)
+    normal_html = convert(text=hard_wraps_md)
+    print("="*50)
+    print(normal_html)
+    
+    # With hard wraps enabled
+    hard_wraps_html = convert(text=hard_wraps_md, hard_wraps=True)
+    print("="*50)
+    print(hard_wraps_html)
+    
+    has_br = "<br" in hard_wraps_html
+    no_br = "<br" not in normal_html
+    
+    if not has_br:
+        fail("Hard wraps conversion failed to add <br> tags")
+    
+    if not no_br:
+        fail("Regular conversion should not add <br> tags")
 
     print("All tests passed!")
     return True
