@@ -58,6 +58,110 @@ func isTruthy(v starlark.Value) bool {
 	return true
 }
 
+// markdownOptions contains the options for configuring the markdown converter
+type markdownOptions struct {
+	unsafe           bool
+	enableHeadingID  bool
+	enableLinkify    bool
+	enableTable      bool
+	enableTaskList   bool
+	enableStrike     bool
+	enableFootnote   bool
+	enableDefinition bool
+	enableTypograph  bool
+	enableEmoji      bool
+	hardWraps        bool
+}
+
+// createMarkdownConverter creates a goldmark converter with the specified options
+func createMarkdownConverter(opts markdownOptions) goldmark.Markdown {
+	mdOptions := []goldmark.Option{}
+
+	// Add renderer options
+	rendererOptions := []renderer.Option{}
+	if opts.unsafe {
+		rendererOptions = append(rendererOptions, html.WithUnsafe())
+	}
+	if opts.hardWraps {
+		rendererOptions = append(rendererOptions, html.WithHardWraps())
+	}
+	if len(rendererOptions) > 0 {
+		mdOptions = append(mdOptions, goldmark.WithRendererOptions(rendererOptions...))
+	}
+
+	// Add parser options
+	parserOptions := []parser.Option{}
+	if opts.enableHeadingID {
+		parserOptions = append(parserOptions, parser.WithAutoHeadingID())
+	}
+	if len(parserOptions) > 0 {
+		mdOptions = append(mdOptions, goldmark.WithParserOptions(parserOptions...))
+	}
+
+	// Add extensions
+	extensions := []goldmark.Extender{}
+	if opts.enableTable {
+		extensions = append(extensions, extension.Table)
+	}
+	if opts.enableLinkify {
+		extensions = append(extensions, extension.Linkify)
+	}
+	if opts.enableTaskList {
+		extensions = append(extensions, extension.TaskList)
+	}
+	if opts.enableStrike {
+		extensions = append(extensions, extension.Strikethrough)
+	}
+	if opts.enableFootnote {
+		extensions = append(extensions, extension.Footnote)
+	}
+	if opts.enableDefinition {
+		extensions = append(extensions, extension.DefinitionList)
+	}
+	if opts.enableTypograph {
+		extensions = append(extensions, extension.Typographer)
+	}
+	if opts.enableEmoji {
+		extensions = append(extensions, emoji.Emoji)
+	}
+
+	if len(extensions) > 0 {
+		mdOptions = append(mdOptions, goldmark.WithExtensions(extensions...))
+	}
+
+	// Create markdown converter
+	return goldmark.New(mdOptions...)
+}
+
+// convertMarkdownToHTML converts markdown text to HTML using the given converter
+func convertMarkdownToHTML(md goldmark.Markdown, text string) (string, error) {
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(text), &buf); err != nil {
+		return "", fmt.Errorf("failed to convert markdown to HTML: %v", err)
+	}
+	return buf.String(), nil
+}
+
+// parseOptions unpacks the markdown options from Starlark values
+func parseOptions(
+	unsafe, headingID, linkify, table, taskList, strike,
+	footnote, definition, typograph, emojiEnabled, hardWraps starlark.Bool,
+) markdownOptions {
+	return markdownOptions{
+		unsafe:           bool(unsafe),
+		enableHeadingID:  bool(headingID),
+		enableLinkify:    bool(linkify),
+		enableTable:      bool(table),
+		enableTaskList:   bool(taskList),
+		enableStrike:     bool(strike),
+		enableFootnote:   bool(footnote),
+		enableDefinition: bool(definition),
+		enableTypograph:  bool(typograph),
+		enableEmoji:      bool(emojiEnabled),
+		hardWraps:        bool(hardWraps),
+	}
+}
+
 // genConvertFunc generates the Starlark callable function to convert markdown to HTML.
 func (m *Module) genConvertFunc() starlark.Callable {
 	return starlark.NewBuiltin(ModuleName+".convert", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -93,71 +197,21 @@ func (m *Module) genConvertFunc() starlark.Callable {
 			return none, err
 		}
 
-		// Configure markdown renderer
-		mdOptions := []goldmark.Option{}
-
-		// Add renderer options
-		rendererOptions := []renderer.Option{}
-		if isTruthy(unsafe) {
-			rendererOptions = append(rendererOptions, html.WithUnsafe())
-		}
-		if isTruthy(hardWraps) {
-			rendererOptions = append(rendererOptions, html.WithHardWraps())
-		}
-		if len(rendererOptions) > 0 {
-			mdOptions = append(mdOptions, goldmark.WithRendererOptions(rendererOptions...))
-		}
-
-		// Add parser options
-		parserOptions := []parser.Option{}
-		if isTruthy(enableHeadingID) {
-			parserOptions = append(parserOptions, parser.WithAutoHeadingID())
-		}
-		if len(parserOptions) > 0 {
-			mdOptions = append(mdOptions, goldmark.WithParserOptions(parserOptions...))
-		}
-
-		// Add extensions
-		extensions := []goldmark.Extender{}
-		if isTruthy(enableTable) {
-			extensions = append(extensions, extension.Table)
-		}
-		if isTruthy(enableLinkify) {
-			extensions = append(extensions, extension.Linkify)
-		}
-		if isTruthy(enableTaskList) {
-			extensions = append(extensions, extension.TaskList)
-		}
-		if isTruthy(enableStrike) {
-			extensions = append(extensions, extension.Strikethrough)
-		}
-		if isTruthy(enableFootnote) {
-			extensions = append(extensions, extension.Footnote)
-		}
-		if isTruthy(enableDefinition) {
-			extensions = append(extensions, extension.DefinitionList)
-		}
-		if isTruthy(enableTypograph) {
-			extensions = append(extensions, extension.Typographer)
-		}
-		if isTruthy(enableEmoji) {
-			extensions = append(extensions, emoji.Emoji)
-		}
-
-		if len(extensions) > 0 {
-			mdOptions = append(mdOptions, goldmark.WithExtensions(extensions...))
-		}
-
-		// Create markdown converter
-		md := goldmark.New(mdOptions...)
+		// Parse options and create the markdown converter
+		opts := parseOptions(
+			unsafe, enableHeadingID, enableLinkify, enableTable,
+			enableTaskList, enableStrike, enableFootnote, enableDefinition,
+			enableTypograph, enableEmoji, hardWraps,
+		)
+		md := createMarkdownConverter(opts)
 
 		// Convert markdown to HTML
-		var buf bytes.Buffer
-		if err := md.Convert([]byte(markdownText.GoString()), &buf); err != nil {
-			return none, fmt.Errorf("failed to convert markdown to HTML: %v", err)
+		html, err := convertMarkdownToHTML(md, markdownText.GoString())
+		if err != nil {
+			return none, err
 		}
 
-		return starlark.String(buf.String()), nil
+		return starlark.String(html), nil
 	})
 }
 
@@ -165,17 +219,17 @@ func (m *Module) genConvertFunc() starlark.Callable {
 func (m *Module) genCreateConverterFunc() starlark.Callable {
 	return starlark.NewBuiltin(ModuleName+".create_converter", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var (
-			unsafe           starlark.Value = starlark.Bool(true)
-			enableHeadingID  starlark.Value = starlark.Bool(true)
-			enableLinkify    starlark.Value = starlark.Bool(true)
-			enableTable      starlark.Value = starlark.Bool(true)
-			enableTaskList   starlark.Value = starlark.Bool(true)
-			enableStrike     starlark.Value = starlark.Bool(true)
-			enableFootnote   starlark.Value = starlark.Bool(false)
-			enableDefinition starlark.Value = starlark.Bool(false)
-			enableTypograph  starlark.Value = starlark.Bool(false)
-			enableEmoji      starlark.Value = starlark.Bool(false)
-			hardWraps        starlark.Value = starlark.Bool(false)
+			unsafe           = starlark.Bool(true)
+			enableHeadingID  = starlark.Bool(true)
+			enableLinkify    = starlark.Bool(true)
+			enableTable      = starlark.Bool(true)
+			enableTaskList   = starlark.Bool(true)
+			enableStrike     = starlark.Bool(true)
+			enableFootnote   = starlark.Bool(false)
+			enableDefinition = starlark.Bool(false)
+			enableTypograph  = starlark.Bool(false)
+			enableEmoji      = starlark.Bool(false)
+			hardWraps        = starlark.Bool(false)
 		)
 
 		if err := starlark.UnpackArgs(b.Name(), args, kwargs,
@@ -194,78 +248,30 @@ func (m *Module) genCreateConverterFunc() starlark.Callable {
 			return none, err
 		}
 
-		// Create converter function
+		// Parse options
+		opts := parseOptions(
+			unsafe, enableHeadingID, enableLinkify, enableTable,
+			enableTaskList, enableStrike, enableFootnote, enableDefinition,
+			enableTypograph, enableEmoji, hardWraps,
+		)
+
+		// Create a converter function that takes a markdown string and returns HTML
 		converter := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 			var markdownText starlark.String
 			if err := starlark.UnpackPositionalArgs(b.Name(), args, kwargs, 1, &markdownText); err != nil {
 				return none, err
 			}
 
-			// Configure markdown renderer
-			mdOptions := []goldmark.Option{}
-
-			// Add renderer options
-			rendererOptions := []renderer.Option{}
-			if isTruthy(unsafe) {
-				rendererOptions = append(rendererOptions, html.WithUnsafe())
-			}
-			if isTruthy(hardWraps) {
-				rendererOptions = append(rendererOptions, html.WithHardWraps())
-			}
-			if len(rendererOptions) > 0 {
-				mdOptions = append(mdOptions, goldmark.WithRendererOptions(rendererOptions...))
-			}
-
-			// Add parser options
-			parserOptions := []parser.Option{}
-			if isTruthy(enableHeadingID) {
-				parserOptions = append(parserOptions, parser.WithAutoHeadingID())
-			}
-			if len(parserOptions) > 0 {
-				mdOptions = append(mdOptions, goldmark.WithParserOptions(parserOptions...))
-			}
-
-			// Add extensions
-			extensions := []goldmark.Extender{}
-			if isTruthy(enableTable) {
-				extensions = append(extensions, extension.Table)
-			}
-			if isTruthy(enableLinkify) {
-				extensions = append(extensions, extension.Linkify)
-			}
-			if isTruthy(enableTaskList) {
-				extensions = append(extensions, extension.TaskList)
-			}
-			if isTruthy(enableStrike) {
-				extensions = append(extensions, extension.Strikethrough)
-			}
-			if isTruthy(enableFootnote) {
-				extensions = append(extensions, extension.Footnote)
-			}
-			if isTruthy(enableDefinition) {
-				extensions = append(extensions, extension.DefinitionList)
-			}
-			if isTruthy(enableTypograph) {
-				extensions = append(extensions, extension.Typographer)
-			}
-			if isTruthy(enableEmoji) {
-				extensions = append(extensions, emoji.Emoji)
-			}
-
-			if len(extensions) > 0 {
-				mdOptions = append(mdOptions, goldmark.WithExtensions(extensions...))
-			}
-
-			// Create markdown converter
-			md := goldmark.New(mdOptions...)
+			// Create the markdown converter with the preset options
+			md := createMarkdownConverter(opts)
 
 			// Convert markdown to HTML
-			var buf bytes.Buffer
-			if err := md.Convert([]byte(markdownText.GoString()), &buf); err != nil {
-				return none, fmt.Errorf("failed to convert markdown to HTML: %v", err)
+			html, err := convertMarkdownToHTML(md, markdownText.GoString())
+			if err != nil {
+				return none, err
 			}
 
-			return starlark.String(buf.String()), nil
+			return starlark.String(html), nil
 		}
 
 		return starlark.NewBuiltin("custom_converter", converter), nil
