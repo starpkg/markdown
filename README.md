@@ -1,6 +1,10 @@
 # 📝 `markdown` - Starlark Module for Markdown to HTML Conversion
 
-A simple and powerful Starlark module for converting Markdown to HTML. Built on the [goldmark](https://github.com/yuin/goldmark) Markdown parser, this module provides a clean API for transforming Markdown content into HTML with customizable rendering options.
+[![Go Report Card](https://goreportcard.com/badge/github.com/starpkg/markdown)](https://goreportcard.com/report/github.com/starpkg/markdown)
+[![GoDoc](https://godoc.org/github.com/starpkg/markdown?status.svg)](https://godoc.org/github.com/starpkg/markdown)
+[![License](https://img.shields.io/github/license/starpkg/markdown.svg)](https://github.com/starpkg/markdown/blob/master/LICENSE)
+
+A powerful Starlark module for Markdown to HTML conversion. Built on [goldmark](https://github.com/yuin/goldmark), this module provides a clean API for transforming Markdown content with customizable rendering options.
 
 ## Features
 
@@ -27,14 +31,15 @@ A simple and powerful Starlark module for converting Markdown to HTML. Built on 
 go get github.com/starpkg/markdown
 ```
 
-## Usage in Go
+## Usage
+
+### In Go
 
 ```go
 package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/1set/starlet"
 	"github.com/starpkg/markdown"
@@ -45,114 +50,43 @@ func main() {
 	mod := markdown.NewModule()
 
 	// Create a Starlet interpreter with the module
-	lazyLoaders := starlet.ModuleLoaderMap{
-		"markdown": mod.LoadModule(),
-	}
-	interpreter := starlet.NewWithLoaders(nil, nil, lazyLoaders)
+	interpreter := starlet.New(
+		starlet.WithModuleLoader("markdown", mod.LoadModule()),
+	)
 
-	// Run a Starlark script that uses markdown
+	// Define a Starlark script using the markdown module
 	script := `
 load("markdown", "convert")
 
-# Sample markdown text
-md = """
-# Hello World
-
-This is a **bold** statement and *italicized* text.
-
-## Lists
-
-* Item 1
-* Item 2
-  * Nested item
-  * Another nested item
-* Item 3
-
-## Code
-
-` + "```" + `go
-func main() {
-    fmt.Println("Hello, World!")
-}
-` + "```" + `
-
-## Tables
-
-| Name | Age | Occupation |
-|------|-----|------------|
-| Alice | 28 | Engineer |
-| Bob | 32 | Designer |
-
-## Emojis
-I :heart: Markdown! :tada:
-"""
-
-# Convert markdown to HTML with emoji support
-html = convert(text=md, emoji=True)
+# Convert markdown to HTML
+html = convert(text="# Hello World\n\nThis is **bold** text.")
 print(html)
-
-# Convert with custom options
-html_no_tables = convert(text=md, table=False)
-print("HTML without tables:", html_no_tables)
 `
 
 	// Execute the script
-	if _, err := interpreter.RunScript([]byte(script), nil); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+	if err := interpreter.ExecScript("example.star", script); err != nil {
+		fmt.Printf("Error: %v\n", err)
 	}
 }
 ```
 
-## Starlark API
+### In Starlark
 
-### Functions
-
-#### `convert(text, unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
-
-Converts Markdown text to HTML. Parameters:
-
-- `text`: The Markdown text to convert (required)
-- `unsafe`: Allow raw HTML (default: true)
-- `heading_id`: Auto-generate heading IDs (default: true)
-- `linkify`: Auto-link URLs (default: true)
-- `table`: Enable table support (default: true)
-- `task_list`: Enable task list support (default: true)
-- `strikethrough`: Enable strikethrough support (default: true)
-- `footnote`: Enable footnote support (default: false)
-- `definition`: Enable definition list support (default: false)
-- `typograph`: Enable typographer extension (default: false)
-- `emoji`: Enable emoji support for GitHub-style emojis like `:smile:` (default: false)
-- `hard_wraps`: Convert newlines to `<br>` tags (default: false)
-
-Returns the HTML result as a string.
-
-#### `create_converter(unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
-
-Creates a configured converter function with preset options. Parameters are the same as `convert()`, but without the `text` parameter.
-
-Returns a function that takes a markdown string and returns the converted HTML.
-
-## Examples
-
-### Basic Conversion
+#### Basic Conversion
 
 ```python
 load("markdown", "convert")
 
-# Simple conversion
-markdown_text = "# Hello World\n\nThis is a **bold** statement."
-html = convert(text=markdown_text)
+# Convert markdown to HTML
+html = convert(text="# Hello World\n\nThis is **bold** text.")
 print(html)
+
+# Output:
+# <h1 id="hello-world">Hello World</h1>
+# <p>This is <strong>bold</strong> text.</p>
 ```
 
-Output:
-```html
-<h1 id="hello-world">Hello World</h1>
-<p>This is a <strong>bold</strong> statement.</p>
-```
-
-### Advanced Features
+#### Advanced Features
 
 ```python
 load("markdown", "convert")
@@ -189,6 +123,60 @@ html = convert(
 print(html)
 ```
 
+#### Creating a Custom Converter
+
+```python
+load("markdown", "create_converter")
+
+# Create a converter with custom options
+basic_converter = create_converter(
+    unsafe=False,
+    table=False,
+    strikethrough=False,
+    emoji=True,
+    hard_wraps=True
+)
+
+# Use the custom converter
+html = basic_converter("# Hello\n\nFirst line\nSecond line")
+print(html)
+```
+
+## API Reference
+
+### Functions
+
+#### `convert(text, unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
+
+Converts Markdown text to HTML.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | string | (required) | The Markdown text to convert |
+| `unsafe` | bool | `true` | Allow raw HTML |
+| `heading_id` | bool | `true` | Auto-generate heading IDs |
+| `linkify` | bool | `true` | Auto-link URLs |
+| `table` | bool | `true` | Enable table support |
+| `task_list` | bool | `true` | Enable task list support |
+| `strikethrough` | bool | `true` | Enable strikethrough support |
+| `footnote` | bool | `false` | Enable footnote support |
+| `definition` | bool | `false` | Enable definition list support |
+| `typograph` | bool | `false` | Enable typographer extension |
+| `emoji` | bool | `false` | Enable emoji support |
+| `hard_wraps` | bool | `false` | Convert newlines to `<br>` tags |
+
+**Returns:** HTML string
+
+#### `create_converter(unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
+
+Creates a configured converter function with preset options. Parameters are the same as `convert()`, but without the `text` parameter.
+
+**Returns:** Function that takes a markdown string and returns HTML
+
+## Examples
+
 ### Hard Wraps Example
 
 ```python
@@ -210,41 +198,6 @@ html_normal = convert(text=markdown_text)
 print(html_normal)
 ```
 
-### Creating a Custom Converter
-
-```python
-load("markdown", "create_converter")
-
-# Create a converter with custom options
-basic_converter = create_converter(
-    unsafe=False,
-    table=False,
-    strikethrough=False,
-    emoji=True,
-    hard_wraps=True
-)
-
-markdown_text = '''
-# Hello
-
-<script>alert('xss');</script>
-
-| Name | Value |
-|------|-------|
-| Key1 | Val1  |
-
-~~Strikethrough~~
-
-I :heart: Markdown!
-First line
-Second line
-'''
-
-# Use the custom converter
-html = basic_converter(markdown_text)
-print(html)
-```
-
 ## Supported Markdown Syntax
 
 The `markdown` module supports all CommonMark syntax, plus the following extensions (when enabled):
@@ -261,4 +214,4 @@ The `markdown` module supports all CommonMark syntax, plus the following extensi
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
