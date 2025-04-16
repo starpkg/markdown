@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/1set/starlet"
+	"github.com/1set/starlet/dataconv/types"
 	"github.com/starpkg/base"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -60,20 +61,20 @@ func isTruthy(v starlark.Value) bool {
 func (m *Module) genConvertFunc() starlark.Callable {
 	return starlark.NewBuiltin(ModuleName+".convert", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var (
-			markdownText     starlark.String
-			unsafe           starlark.Value = starlark.Bool(true)
-			enableHeadingID  starlark.Value = starlark.Bool(true)
-			enableLinkify    starlark.Value = starlark.Bool(true)
-			enableTable      starlark.Value = starlark.Bool(true)
-			enableTaskList   starlark.Value = starlark.Bool(true)
-			enableStrike     starlark.Value = starlark.Bool(true)
-			enableFootnote   starlark.Value = starlark.Bool(false)
-			enableDefinition starlark.Value = starlark.Bool(false)
-			enableTypograph  starlark.Value = starlark.Bool(false)
+			markdownText     = types.NewNullableStringOrBytesNoDefault()
+			unsafe           = starlark.Bool(true)
+			enableHeadingID  = starlark.Bool(true)
+			enableLinkify    = starlark.Bool(true)
+			enableTable      = starlark.Bool(true)
+			enableTaskList   = starlark.Bool(true)
+			enableStrike     = starlark.Bool(true)
+			enableFootnote   = starlark.Bool(false)
+			enableDefinition = starlark.Bool(false)
+			enableTypograph  = starlark.Bool(false)
 		)
 
 		if err := starlark.UnpackArgs(b.Name(), args, kwargs,
-			"text", &markdownText,
+			"text", markdownText,
 			"unsafe?", &unsafe,
 			"heading_id?", &enableHeadingID,
 			"linkify?", &enableLinkify,
