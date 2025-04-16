@@ -127,7 +127,7 @@ Converts Markdown text to HTML. Parameters:
 
 Returns the HTML result as a string.
 
-#### `with_options(unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
+#### `create_converter(unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
 
 Creates a configured converter function with preset options. Parameters are the same as `convert()`, but without the `text` parameter.
 
@@ -213,10 +213,10 @@ print(html_normal)
 ### Creating a Custom Converter
 
 ```python
-load("markdown", "with_options")
+load("markdown", "create_converter")
 
 # Create a converter with custom options
-basic_converter = with_options(
+basic_converter = create_converter(
     unsafe=False,
     table=False,
     strikethrough=False,

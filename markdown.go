@@ -41,8 +41,8 @@ func NewModule() *Module {
 func (m *Module) LoadModule() starlet.ModuleLoader {
 	// Module functions
 	funcs := starlark.StringDict{
-		"convert":      m.genConvertFunc(),
-		"with_options": m.genWithOptionsFunc(),
+		"convert":          m.genConvertFunc(),
+		"create_converter": m.genCreateConverterFunc(),
 	}
 	return m.cfgMod.LoadModule(ModuleName, funcs)
 }
@@ -161,9 +161,9 @@ func (m *Module) genConvertFunc() starlark.Callable {
 	})
 }
 
-// genWithOptionsFunc generates the Starlark callable function to create a configured markdown converter.
-func (m *Module) genWithOptionsFunc() starlark.Callable {
-	return starlark.NewBuiltin(ModuleName+".with_options", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+// genCreateConverterFunc generates the Starlark callable function to create a configured markdown converter.
+func (m *Module) genCreateConverterFunc() starlark.Callable {
+	return starlark.NewBuiltin(ModuleName+".create_converter", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var (
 			unsafe           starlark.Value = starlark.Bool(true)
 			enableHeadingID  starlark.Value = starlark.Bool(true)
@@ -268,6 +268,6 @@ func (m *Module) genWithOptionsFunc() starlark.Callable {
 			return starlark.String(buf.String()), nil
 		}
 
-		return starlark.NewBuiltin("convert_with_options", converter), nil
+		return starlark.NewBuiltin("custom_converter", converter), nil
 	})
 }

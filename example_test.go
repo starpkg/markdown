@@ -19,7 +19,7 @@ func TestMarkdownConversion(t *testing.T) {
 
 	// Define a Starlark script that uses the markdown module
 	script := `
-load("markdown", "convert", "with_options")
+load("markdown", "convert", "create_converter")
 
 def test_markdown():
     # Sample markdown text
@@ -64,7 +64,7 @@ Visit https://example.com
         fail("Basic conversion missing expected elements")
 
     # Create a custom converter with specific options (disable extensions)
-    minimal_converter = with_options(
+    minimal_converter = create_converter(
         table=False,
         linkify=False,
         strikethrough=False,
