@@ -130,11 +130,17 @@ load("markdown", "create_converter")
 
 # Create a converter with custom options
 basic_converter = create_converter(
-    unsafe=False,
-    table=False,
-    strikethrough=False,
-    emoji=True,
-    hard_wraps=True
+    unsafe=True,         # Default: true
+    heading_id=True,     # Default: true
+    table=False,         # Default: true
+    strikethrough=False, # Default: true
+    linkify=True,        # Default: true
+    task_list=True,      # Default: true
+    emoji=True,          # Default: false
+    footnote=False,      # Default: false
+    definition=False,    # Default: false
+    typograph=False,     # Default: false
+    hard_wraps=True      # Default: false
 )
 
 # Use the custom converter
@@ -192,10 +198,18 @@ Third line
 # With hard wraps (newlines become <br> tags)
 html_hard_wraps = convert(text=markdown_text, hard_wraps=True)
 print(html_hard_wraps)
+# Output:
+# <p>First line<br>
+# Second line<br>
+# Third line</p>
 
 # Without hard wraps (default)
 html_normal = convert(text=markdown_text)
 print(html_normal)
+# Output:
+# <p>First line
+# Second line
+# Third line</p>
 ```
 
 ## Supported Markdown Syntax
