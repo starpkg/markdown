@@ -123,6 +123,19 @@ Only set `unsafe=True` when you fully trust the Markdown source. Conversion
 panics from the underlying renderer are also recovered into normal errors, so
 malformed input never crashes the host.
 
+## Configuration
+
+Untrusted Markdown is bounded by an input-size cap before it reaches the
+renderer — input longer than `max_input_bytes` is rejected with a clean error
+(matching the `yaml`/`toml` modules).
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_input_bytes` | `int` | `5242880` | Maximum input size in bytes (5 MiB); `0` disables the cap |
+
+Settable from Starlark via `set_max_input_bytes(n)` or from the environment via
+`MARKDOWN_MAX_INPUT_BYTES`.
+
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

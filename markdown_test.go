@@ -8,8 +8,13 @@ package markdown_test
 //                              filtered out by default and only passed through when
 //                              opted in with unsafe=True (for both convert and
 //                              create_converter).
+//   - TestMaxInputBytes:       the max_input_bytes host config cap — a tiny cap
+//                              rejects oversized input with a clean error (for both
+//                              convert and create_converter), while normal-sized
+//                              input still converts.
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/1set/starlet"
@@ -187,4 +192,66 @@ test_unsafe_default()
 	if _, err := interpreter.RunScript([]byte(script), nil); err != nil {
 		t.Fatalf("Failed to execute unsafe-default test script: %v", err)
 	}
+}
+
+// TestMaxInputBytes verifies the max_input_bytes host config cap: a tiny cap set
+// via the MARKDOWN_MAX_INPUT_BYTES environment variable rejects oversized input
+// with a clean error (for both convert and create_converter), while normal-sized
+// input still converts to HTML.
+func TestMaxInputBytes(t *testing.T) {
+	run := func(t *testing.T, script string) error {
+		t.Helper()
+		mod := markdown.NewModule()
+		interpreter := starlet.NewWithLoaders(nil, nil, starlet.ModuleLoaderMap{
+			"markdown": mod.LoadModule(),
+		})
+		_, err := interpreter.RunScript([]byte(script), nil)
+		return err
+	}
+
+	// Tiny cap rejects oversized input — via convert().
+	t.Run("convert rejects oversized", func(t *testing.T) {
+		t.Setenv("MARKDOWN_MAX_INPUT_BYTES", "8")
+		err := run(t, `
+load("markdown", "convert")
+convert(text="# this heading is well over eight bytes")
+`)
+		if err == nil || !strings.Contains(err.Error(), "max_input_bytes") {
+			t.Fatalf("expected max_input_bytes error, got %v", err)
+		}
+	})
+
+	// Tiny cap rejects oversized input — via create_converter().
+	t.Run("create_converter rejects oversized", func(t *testing.T) {
+		t.Setenv("MARKDOWN_MAX_INPUT_BYTES", "8")
+		err := run(t, `
+load("markdown", "create_converter")
+to_html = create_converter()
+to_html("# this heading is well over eight bytes")
+`)
+		if err == nil || !strings.Contains(err.Error(), "max_input_bytes") {
+			t.Fatalf("expected max_input_bytes error, got %v", err)
+		}
+	})
+
+	// Normal-sized input passes (default 5 MiB cap, env unset).
+	t.Run("normal input passes", func(t *testing.T) {
+		err := run(t, `
+load("markdown", "convert", "create_converter")
+
+def check():
+    html = convert(text="# Hello")
+    if "<h1" not in html:
+        fail("expected heading in convert output, got: " + html)
+    to_html = create_converter()
+    html2 = to_html("# Hello")
+    if "<h1" not in html2:
+        fail("expected heading in create_converter output, got: " + html2)
+
+check()
+`)
+		if err != nil {
+			t.Fatalf("normal input should convert, got %v", err)
+		}
+	})
 }
