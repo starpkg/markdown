@@ -20,18 +20,44 @@ import (
 // ModuleName defines the expected name for this module when used in Starlark's load() function, e.g., load('markdown', 'convert')
 const ModuleName = "markdown"
 
+const configKeyMaxInputBytes = "max_input_bytes"
+
+const defaultMaxInputBytes = 5 << 20 // 5 MiB
+
 var none = starlark.None
 
 // Module wraps the ConfigurableModule with specific functionality for markdown conversion.
 type Module struct {
 	cfgMod *base.ConfigurableModule
+	ext    *base.ConfigurableModuleExt
 }
 
 // NewModule creates a new instance of Module with default configurations.
 func NewModule() *Module {
-	return &Module{
-		cfgMod: base.NewConfigurableModule(),
+	cm, _ := base.NewConfigurableModuleWithConfigOptions(
+		genConfigOption(configKeyMaxInputBytes, "Maximum input size in bytes when converting", defaultMaxInputBytes),
+	)
+	return &Module{cfgMod: cm, ext: cm.Extend()}
+}
+
+func genConfigOption[T any](name, description string, defaultValue T) *base.ConfigOption[T] {
+	return base.NewConfigOption(defaultValue).
+		WithName(name).
+		WithDescription(description).
+		WithEnvVar("MARKDOWN_" + upper(name))
+}
+
+// upper uppercases an ASCII config-key name for the environment-variable prefix.
+func upper(s string) string {
+	out := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		out[i] = c
 	}
+	return string(out)
 }
 
 // LoadModule returns the Starlark module loader with markdown-specific functions.
@@ -42,17 +68,6 @@ func (m *Module) LoadModule() starlet.ModuleLoader {
 		"create_converter": m.genCreateConverterFunc(),
 	}
 	return m.cfgMod.LoadModule(ModuleName, funcs)
-}
-
-// isTruthy checks if a starlark.Value is truthy (not None and not false)
-func isTruthy(v starlark.Value) bool {
-	if v == none {
-		return false
-	}
-	if b, ok := v.(starlark.Bool); ok {
-		return bool(b)
-	}
-	return true
 }
 
 // markdownOptions contains the options for configuring the markdown converter
@@ -208,14 +223,29 @@ func (m *Module) genConvertFunc() starlark.Callable {
 		)
 		md := createMarkdownConverter(opts)
 
+		// Reject oversized input before handing it to goldmark.
+		text := markdownText.GoString()
+		if err := m.checkInputSize(text); err != nil {
+			return none, err
+		}
+
 		// Convert markdown to HTML
-		html, err := convertMarkdownToHTML(md, markdownText.GoString())
+		html, err := convertMarkdownToHTML(md, text)
 		if err != nil {
 			return none, err
 		}
 
 		return starlark.String(html), nil
 	})
+}
+
+// checkInputSize rejects input longer than the configured max_input_bytes
+// (when positive) before it reaches goldmark.
+func (m *Module) checkInputSize(text string) error {
+	if maxBytes := m.ext.GetInt(configKeyMaxInputBytes); maxBytes > 0 && len(text) > maxBytes {
+		return fmt.Errorf("%s.convert: input exceeds max_input_bytes (%d)", ModuleName, maxBytes)
+	}
+	return nil
 }
 
 // genCreateConverterFunc generates the Starlark callable function to create a configured markdown converter.
@@ -268,8 +298,14 @@ func (m *Module) genCreateConverterFunc() starlark.Callable {
 			// Create the markdown converter with the preset options
 			md := createMarkdownConverter(opts)
 
+			// Reject oversized input before handing it to goldmark.
+			text := markdownText.GoString()
+			if err := m.checkInputSize(text); err != nil {
+				return none, err
+			}
+
 			// Convert markdown to HTML
-			html, err := convertMarkdownToHTML(md, markdownText.GoString())
+			html, err := convertMarkdownToHTML(md, text)
 			if err != nil {
 				return none, err
 			}
