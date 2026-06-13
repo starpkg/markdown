@@ -14,6 +14,13 @@ auto heading IDs).
 go get github.com/starpkg/markdown
 ```
 
+> **Go floor:** this module requires **Go 1.22+**. It tracks the **latest**
+> [goldmark](https://github.com/yuin/goldmark) (no downgrade) for upstream
+> security and correctness fixes; the recent goldmark releases raise their own
+> Go floor, so this module relaxes its floor to match (per ENG-09 SEP — a
+> module may raise its floor when a dependency requires it, like the `email`
+> module).
+
 ## Functions
 
 | Function | Signature | Description |
