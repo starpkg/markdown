@@ -1,5 +1,14 @@
 package markdown_test
 
+// Test sections:
+//   - TestMarkdownConversion:  end-to-end conversion + extensions (headings, bold,
+//                              tables, autolinks, strikethrough, task lists, emoji,
+//                              hard wraps) via convert and create_converter.
+//   - TestUnsafeDefault:       secure-by-default raw-HTML handling — raw HTML is
+//                              filtered out by default and only passed through when
+//                              opted in with unsafe=True (for both convert and
+//                              create_converter).
+
 import (
 	"testing"
 
@@ -134,5 +143,48 @@ test_result = test_markdown()
 	_, err := interpreter.RunScript([]byte(script), nil)
 	if err != nil {
 		t.Fatalf("Failed to execute test script: %v", err)
+	}
+}
+
+// TestUnsafeDefault verifies the secure-by-default posture: raw HTML in the
+// markdown source is filtered out unless the caller opts in with unsafe=True.
+// It covers both convert() and create_converter().
+func TestUnsafeDefault(t *testing.T) {
+	mod := markdown.NewModule()
+	lazyLoaders := starlet.ModuleLoaderMap{
+		"markdown": mod.LoadModule(),
+	}
+	interpreter := starlet.NewWithLoaders(nil, nil, lazyLoaders)
+
+	script := `
+load("markdown", "convert", "create_converter")
+
+raw = "Hello <script>alert('x')</script> world"
+
+def test_unsafe_default():
+    # Default: raw HTML is filtered out (secure by default).
+    safe_html = convert(text=raw)
+    if "<script>" in safe_html:
+        fail("default convert should strip raw HTML, got: " + safe_html)
+
+    # Opt in: unsafe=True passes raw HTML through.
+    unsafe_html = convert(text=raw, unsafe=True)
+    if "<script>" not in unsafe_html:
+        fail("convert(unsafe=True) should pass raw HTML through, got: " + unsafe_html)
+
+    # create_converter shares the same default.
+    safe_conv = create_converter()
+    if "<script>" in safe_conv(raw):
+        fail("default create_converter should strip raw HTML")
+
+    unsafe_conv = create_converter(unsafe=True)
+    if "<script>" not in unsafe_conv(raw):
+        fail("create_converter(unsafe=True) should pass raw HTML through")
+
+test_unsafe_default()
+`
+
+	if _, err := interpreter.RunScript([]byte(script), nil); err != nil {
+		t.Fatalf("Failed to execute unsafe-default test script: %v", err)
 	}
 }

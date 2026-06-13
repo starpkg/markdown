@@ -25,15 +25,12 @@ var none = starlark.None
 // Module wraps the ConfigurableModule with specific functionality for markdown conversion.
 type Module struct {
 	cfgMod *base.ConfigurableModule
-	ext    *base.ConfigurableModuleExt
 }
 
 // NewModule creates a new instance of Module with default configurations.
 func NewModule() *Module {
-	cm := base.NewConfigurableModule()
 	return &Module{
-		cfgMod: cm,
-		ext:    cm.Extend(),
+		cfgMod: base.NewConfigurableModule(),
 	}
 }
 
@@ -133,11 +130,17 @@ func createMarkdownConverter(opts markdownOptions) goldmark.Markdown {
 	return goldmark.New(mdOptions...)
 }
 
-// convertMarkdownToHTML converts markdown text to HTML using the given converter
-func convertMarkdownToHTML(md goldmark.Markdown, text string) (string, error) {
+// convertMarkdownToHTML converts markdown text to HTML using the given converter,
+// recovering any goldmark panic into an error.
+func convertMarkdownToHTML(md goldmark.Markdown, text string) (s string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			s, err = "", fmt.Errorf("failed to convert markdown to HTML: convert panic: %v", r)
+		}
+	}()
 	var buf bytes.Buffer
-	if err := md.Convert([]byte(text), &buf); err != nil {
-		return "", fmt.Errorf("failed to convert markdown to HTML: %v", err)
+	if cerr := md.Convert([]byte(text), &buf); cerr != nil {
+		return "", fmt.Errorf("failed to convert markdown to HTML: %v", cerr)
 	}
 	return buf.String(), nil
 }
@@ -167,7 +170,7 @@ func (m *Module) genConvertFunc() starlark.Callable {
 	return starlark.NewBuiltin(ModuleName+".convert", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var (
 			markdownText     = types.NewNullableStringOrBytesNoDefault()
-			unsafe           = starlark.Bool(true)
+			unsafe           = starlark.Bool(false)
 			enableHeadingID  = starlark.Bool(true)
 			enableLinkify    = starlark.Bool(true)
 			enableTable      = starlark.Bool(true)
@@ -219,7 +222,7 @@ func (m *Module) genConvertFunc() starlark.Callable {
 func (m *Module) genCreateConverterFunc() starlark.Callable {
 	return starlark.NewBuiltin(ModuleName+".create_converter", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var (
-			unsafe           = starlark.Bool(true)
+			unsafe           = starlark.Bool(false)
 			enableHeadingID  = starlark.Bool(true)
 			enableLinkify    = starlark.Bool(true)
 			enableTable      = starlark.Bool(true)
