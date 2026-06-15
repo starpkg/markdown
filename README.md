@@ -8,6 +8,17 @@ opt-in extensions (tables, task lists, strikethrough, autolinks, footnotes,
 definition lists, typographer, emoji) and configurable rendering (hard wraps,
 auto heading IDs).
 
+This is a `starpkg` module: starpkg provides support for necessary **local**
+operations plus simple abstractions over common **online** services, for ease
+of use. Markdown rendering is a purely **local** capability — it runs entirely
+in-process (no network, no filesystem), so a script can turn untrusted Markdown
+into HTML without reaching out to anything.
+
+The module exposes two builtins — `convert` and `create_converter` — and
+`create_converter` hands back a callable named `custom_converter`. The host
+config option `max_input_bytes` is reachable from scripts as the
+`get_max_input_bytes` / `set_max_input_bytes` pair.
+
 ## Installation
 
 ```bash
@@ -26,13 +37,21 @@ go get github.com/starpkg/markdown
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `convert` | `convert(text, unsafe=False, heading_id=True, linkify=True, table=True, task_list=True, strikethrough=True, footnote=False, definition=False, typograph=False, emoji=False, hard_wraps=False) -> str` | Convert Markdown `text` to an HTML string. |
-| `create_converter` | `create_converter(unsafe=False, heading_id=True, linkify=True, table=True, task_list=True, strikethrough=True, footnote=False, definition=False, typograph=False, emoji=False, hard_wraps=False) -> callable` | Build a converter with preset options; the returned callable takes a Markdown string and returns HTML. |
+| `create_converter` | `create_converter(unsafe=False, heading_id=True, linkify=True, table=True, task_list=True, strikethrough=True, footnote=False, definition=False, typograph=False, emoji=False, hard_wraps=False) -> callable` | Build a converter with preset options; returns a `custom_converter` callable. |
+
+The callable returned by `create_converter` is a builtin named `custom_converter`.
+It takes a single positional argument — the Markdown **string** to render — and
+returns the HTML string, applying the options frozen in at `create_converter`
+time (it accepts no further option keywords). The same `max_input_bytes` cap is
+enforced on every call. Note that `convert` requires the `text` argument and
+accepts it as a `string`, `bytes`, or `None` (`None` renders as empty; omitting
+`text` entirely is an error), whereas `custom_converter` accepts a `string` only.
 
 Option reference (shared by both functions):
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `text` | `string` | (required) | Markdown text to convert (`convert` only). |
+| `text` | `string` / `bytes` / `None` | (required) | Markdown text to convert (`convert` only); the argument is required, but `None` renders as empty. |
 | `unsafe` | `bool` | `False` | Pass raw inline/block HTML through instead of filtering it (see Safety). |
 | `heading_id` | `bool` | `True` | Auto-generate `id` attributes for headings. |
 | `linkify` | `bool` | `True` | Auto-link bare URLs. |
@@ -136,12 +155,21 @@ Untrusted Markdown is bounded by an input-size cap before it reaches the
 renderer — input longer than `max_input_bytes` is rejected with a clean error
 (matching the `yaml`/`toml` modules).
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `max_input_bytes` | `int` | `5242880` | Maximum input size in bytes (5 MiB); `0` disables the cap |
+| Option | Type | Default | Environment Variable | Description |
+|--------|------|---------|----------------------|-------------|
+| `max_input_bytes` | `int` | `5242880` | `MARKDOWN_MAX_INPUT_BYTES` | Maximum input size in bytes (5 MiB); `0` disables the cap |
 
-Settable from Starlark via `set_max_input_bytes(n)` or from the environment via
+The config option is exposed to Starlark by the `base` module system as a
+getter/setter pair: read it with `get_max_input_bytes()` and change it with
+`set_max_input_bytes(n)`. It can also be set from the environment via
 `MARKDOWN_MAX_INPUT_BYTES`.
+
+```python
+load("markdown", "convert", "set_max_input_bytes", "get_max_input_bytes")
+
+set_max_input_bytes(1 << 20)   # cap input at 1 MiB
+print(get_max_input_bytes())   # 1048576
+```
 
 ## License
 
