@@ -43,15 +43,15 @@ The callable returned by `create_converter` is a builtin named `custom_converter
 It takes a single positional argument — the Markdown **string** to render — and
 returns the HTML string, applying the options frozen in at `create_converter`
 time (it accepts no further option keywords). The same `max_input_bytes` cap is
-enforced on every call. Note that `convert` accepts `text` as a `string`,
-`bytes`, or `None` (a `None` or absent value renders as empty), whereas
-`custom_converter` accepts a `string` only.
+enforced on every call. Note that `convert` requires the `text` argument and
+accepts it as a `string`, `bytes`, or `None` (`None` renders as empty; omitting
+`text` entirely is an error), whereas `custom_converter` accepts a `string` only.
 
 Option reference (shared by both functions):
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `text` | `string` / `bytes` / `None` | (required) | Markdown text to convert (`convert` only); `None` or absent renders as empty. |
+| `text` | `string` / `bytes` / `None` | (required) | Markdown text to convert (`convert` only); the argument is required, but `None` renders as empty. |
 | `unsafe` | `bool` | `False` | Pass raw inline/block HTML through instead of filtering it (see Safety). |
 | `heading_id` | `bool` | `True` | Auto-generate `id` attributes for headings. |
 | `linkify` | `bool` | `True` | Auto-link bare URLs. |
