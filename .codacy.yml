@@ -1,0 +1,6 @@
+---
+# Test files are validated by running them (go test -race), not by static
+# complexity analysis. Production code stays fully analyzed.
+exclude_paths:
+  - "**/*_test.go"
+  - "*_test.go"
