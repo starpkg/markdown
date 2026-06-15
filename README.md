@@ -1,6 +1,8 @@
 # 📝 `markdown` — Markdown to HTML for Starlark
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/starpkg/markdown.svg)](https://pkg.go.dev/github.com/starpkg/markdown)
+[![codecov](https://codecov.io/gh/starpkg/markdown/graph/badge.svg)](https://codecov.io/gh/starpkg/markdown)
+![binary footprint](https://img.shields.io/badge/binary_footprint-%2B1.2_MB-blue)
 
 Convert [Markdown](https://commonmark.org/) to HTML from Starlark, built on
 [goldmark](https://github.com/yuin/goldmark). CommonMark-compliant with
