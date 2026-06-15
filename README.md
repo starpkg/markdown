@@ -50,26 +50,26 @@ script:
 package main
 
 import (
-	"fmt"
+    "fmt"
 
-	"github.com/1set/starlet"
-	"github.com/starpkg/markdown"
+    "github.com/1set/starlet"
+    "github.com/starpkg/markdown"
 )
 
 func main() {
-	mod := markdown.NewModule()
-	interpreter := starlet.NewWithLoaders(nil, nil, starlet.ModuleLoaderMap{
-		"markdown": mod.LoadModule(),
-	})
+    mod := markdown.NewModule()
+    interpreter := starlet.NewWithLoaders(nil, nil, starlet.ModuleLoaderMap{
+        "markdown": mod.LoadModule(),
+    })
 
-	script := `
+    script := `
 load("markdown", "convert")
 html = convert(text="# Hello World\n\nThis is **bold** text.")
 print(html)
 `
-	if _, err := interpreter.RunScript([]byte(script), nil); err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
+    if _, err := interpreter.RunScript([]byte(script), nil); err != nil {
+        fmt.Printf("Error: %v\n", err)
+    }
 }
 ```
 

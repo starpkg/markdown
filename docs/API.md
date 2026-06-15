@@ -22,7 +22,7 @@ back a callable named `custom_converter` with its rendering options frozen in.
 
 ## Functions
 
-### `convert(text, unsafe=False, heading_id=True, linkify=True, table=True, task_list=True, strikethrough=True, footnote=False, definition=False, typograph=False, emoji=False, hard_wraps=False)`
+### `convert(text, unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
 
 Converts Markdown `text` to an HTML string in one call.
 
@@ -83,7 +83,7 @@ I :heart: Markdown!
 )
 ```
 
-### `create_converter(unsafe=False, heading_id=True, linkify=True, table=True, task_list=True, strikethrough=True, footnote=False, definition=False, typograph=False, emoji=False, hard_wraps=False)`
+### `create_converter(unsafe?, heading_id?, linkify?, table?, task_list?, strikethrough?, footnote?, definition?, typograph?, emoji?, hard_wraps?)`
 
 Builds a reusable converter with rendering options preset, and returns a
 callable named `custom_converter` that renders Markdown with those frozen-in
@@ -146,7 +146,7 @@ The defaults reproduce the historical behavior: heading IDs, linkify, tables,
 task lists, and strikethrough on; everything else off.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `text` | string / bytes / None | (required) | Markdown text to convert (`convert` only); the argument is required, but `None` renders as empty |
 | `unsafe` | bool | `False` | Pass raw inline/block HTML through instead of filtering it (see [Safety](#safety)) |
 | `heading_id` | bool | `True` | Auto-generate `id` attributes for headings |
@@ -197,7 +197,7 @@ environment variable, then the default.
 only its `set_<key>` accessor — never a getter — but this module has none.)
 
 | Option | Getter | Setter | Type | Env var | Default | Description |
-|--------|--------|--------|------|---------|---------|-------------|
+| --- | --- | --- | --- | --- | --- | --- |
 | `max_input_bytes` | `get_max_input_bytes` | `set_max_input_bytes` | int | `MARKDOWN_MAX_INPUT_BYTES` | `5242880` | Maximum input size in bytes when converting (5 MiB); `0` disables the cap |
 
 Untrusted Markdown is bounded by this input-size cap before it reaches the
