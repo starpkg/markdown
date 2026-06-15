@@ -4,3 +4,7 @@
 exclude_paths:
   - "**/*_test.go"
   - "*_test.go"
+  # The API reference legitimately repeats method-name headings (MD024) and
+  # uses tables (MD060); doccov validates its substance instead. README.md
+  # stays linted as the front page.
+  - "docs/**"
