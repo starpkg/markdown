@@ -613,8 +613,12 @@ check()
 // the property.
 func TestNoHostPanic(t *testing.T) {
 	cases := []struct {
-		name   string
-		script string
+		name string
+		// wantErr: the adversarial input must surface as a clean script error
+		// rather than a host panic (the big.Int cap). When false, the input must
+		// convert successfully and the in-script fail() assertions must hold.
+		wantErr bool
+		script  string
 	}{
 		{
 			name: "moderately deep blockquote nesting",
@@ -653,7 +657,8 @@ check()
 `,
 		},
 		{
-			name: "oversized big.Int cap is a clean error",
+			name:    "oversized big.Int cap is a clean error",
+			wantErr: true,
 			script: `
 load("markdown", "set_max_input_bytes")
 set_max_input_bytes(999999999999999999999999999999)
@@ -674,12 +679,19 @@ check()
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// We do not assert on the error value here: some cases succeed and
-			// some return a clean script error (e.g. the big.Int cap). The
-			// invariant under test is "no host panic" — if the host panicked,
-			// the test binary would crash with a stack trace instead of the
-			// interpreter returning normally.
-			_ = runScript(t, tc.script)
+			// The invariant under test is "no host panic": a host panic would
+			// crash the test binary with a stack trace instead of the
+			// interpreter returning. Beyond that, we still assert the per-case
+			// expectation so the in-script fail() checks (and the big.Int
+			// clean-error claim) are actually enforced, not silently swallowed.
+			err := runScript(t, tc.script)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected a clean script error, got nil")
+				}
+			} else if err != nil {
+				t.Fatalf("expected clean conversion, got error: %v", err)
+			}
 		})
 	}
 }
