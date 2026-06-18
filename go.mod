@@ -3,8 +3,8 @@ module github.com/starpkg/markdown
 go 1.22
 
 require (
-	github.com/1set/starlet v0.2.1
-	github.com/starpkg/base v0.1.0
+	github.com/1set/starlet v0.2.2
+	github.com/starpkg/base v0.1.1
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/goldmark-emoji v1.0.6
 	go.starlark.net v0.0.0-20260324133313-ffb3f39dd27a
