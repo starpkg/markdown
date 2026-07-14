@@ -182,23 +182,26 @@ malformed input never crashes the host.
 
 ## Configuration
 
-The module's one configuration option is exposed to scripts as a pair of
-generated accessor builtins (loaded from the `markdown` module alongside the
-functions above):
+The module's one configuration option is exposed to scripts through generated
+accessor builtins (loaded from the `markdown` module alongside the functions
+above):
 
 - **`get_<key>()`** — returns the current value of the option.
-- **`set_<key>(value)`** — sets the option (returns `None`).
+- **`set_<key>(value)`** — sets the option (returns `None`) — generated **only**
+  for options that are not host-only.
 
-An option's value resolves in priority order: an explicit `set_<key>` value, the
+An option's value resolves in priority order: an explicit host value, the
 environment variable, then the default.
 
-`max_input_bytes` is **not** a secret option, so it exposes **both**
-`get_max_input_bytes` and `set_max_input_bytes`. (A secret option would expose
-only its `set_<key>` accessor — never a getter — but this module has none.)
+`max_input_bytes` is a **host-only** option: it is the DoS byte cap, so the host
+must stay in control of it. Only `get_max_input_bytes` is generated —
+**`set_max_input_bytes` is intentionally NOT exposed**, so a script cannot
+disable or widen the cap (e.g. `set_max_input_bytes(0)`). The host sets it in Go
+(the option default) or via the `MARKDOWN_MAX_INPUT_BYTES` environment variable.
 
 | Option | Getter | Setter | Type | Env var | Default | Description |
 | --- | --- | --- | --- | --- | --- | --- |
-| `max_input_bytes` | `get_max_input_bytes` | `set_max_input_bytes` | int | `MARKDOWN_MAX_INPUT_BYTES` | `5242880` | Maximum input size in bytes when converting (5 MiB); `0` disables the cap |
+| `max_input_bytes` | `get_max_input_bytes` | `set_max_input_bytes` — **host-only, not generated** | int | `MARKDOWN_MAX_INPUT_BYTES` | `5242880` | Maximum input size in bytes when converting (5 MiB); `0` disables the cap (host-set only) |
 
 Untrusted Markdown is bounded by this input-size cap before it reaches the
 renderer — input longer than `max_input_bytes` is rejected with a clean error
@@ -208,10 +211,9 @@ path: both `convert` and the `custom_converter` returned by `create_converter`.
 **Example:**
 
 ```python
-load("markdown", "convert", "get_max_input_bytes", "set_max_input_bytes")
+load("markdown", "convert", "get_max_input_bytes")
 
-set_max_input_bytes(1 << 20)   # cap input at 1 MiB
-print(get_max_input_bytes())   # 1048576
+print(get_max_input_bytes())   # 5242880 (host-controlled; scripts can only read it)
 
 html = convert(text="# Within the cap")
 ```

@@ -20,9 +20,12 @@ package markdown_test
 //   - TestExtensionToggles:    per-extension on/off behavior reachable from script
 //                              options (footnote, definition list, typographer,
 //                              heading IDs) through both entry points.
-//   - TestMaxInputBytesEdges:  cap edge cases — env value 0 and negative caps both
-//                              disable the cap; the get/set accessors round-trip and
-//                              a changed cap takes effect on the next conversion.
+//   - TestMaxInputBytesEdges:  cap edge cases via the host env var — value 0 and
+//                              negative caps both disable the cap; exact-cap passes
+//                              and one-over fails.
+//   - TestMaxInputBytesIsHostOnly: the DoS cap is host-only — no set_max_input_bytes
+//                              is exposed to scripts, the getter stays readable, and
+//                              the host env var still enforces the cap (STAR-78).
 //   - TestNoHostPanic:         adversarial inputs (deep nesting, oversized cap values,
 //                              malformed markdown) surface as errors or finite output,
 //                              never crashing the host.
@@ -542,13 +545,11 @@ check()
 		}
 	})
 
-	t.Run("negative cap disables the cap", func(t *testing.T) {
+	t.Run("negative env cap disables the cap", func(t *testing.T) {
+		t.Setenv("MARKDOWN_MAX_INPUT_BYTES", "-1")
 		err := runScript(t, `
-load("markdown", "convert", "set_max_input_bytes", "get_max_input_bytes")
+load("markdown", "convert")
 def check():
-    set_max_input_bytes(-1)
-    if get_max_input_bytes() != -1:
-        fail("expected cap to read back as -1")
     # A negative cap is non-positive, so checkInputSize treats it as disabled.
     html = convert(text="# this heading is comfortably over a couple of bytes")
     if "<h1" not in html:
@@ -560,28 +561,12 @@ check()
 		}
 	})
 
-	t.Run("set then enforce on next convert", func(t *testing.T) {
-		err := runScript(t, `
-load("markdown", "convert", "set_max_input_bytes", "get_max_input_bytes")
-def check():
-    set_max_input_bytes(8)
-    if get_max_input_bytes() != 8:
-        fail("expected cap of 8")
-    # An input clearly over 8 bytes must now be rejected.
-    convert(text="# this is well over eight bytes")
-check()
-`)
-		if err == nil || !strings.Contains(err.Error(), "max_input_bytes") {
-			t.Fatalf("expected max_input_bytes error after set, got: %v", err)
-		}
-	})
-
-	t.Run("input exactly at cap passes, one over fails", func(t *testing.T) {
+	t.Run("input exactly at env cap passes, one over fails", func(t *testing.T) {
 		// "abcd" is 4 bytes; a cap of 4 must accept it.
+		t.Setenv("MARKDOWN_MAX_INPUT_BYTES", "4")
 		err := runScript(t, `
-load("markdown", "convert", "set_max_input_bytes")
+load("markdown", "convert")
 def check():
-    set_max_input_bytes(4)
     html = convert(text="abcd")
     if "abcd" not in html:
         fail("input exactly at cap should convert, got: " + html)
@@ -592,14 +577,52 @@ check()
 		}
 		// One byte over the cap must fail.
 		err = runScript(t, `
-load("markdown", "convert", "set_max_input_bytes")
+load("markdown", "convert")
 def check():
-    set_max_input_bytes(4)
     convert(text="abcde")
 check()
 `)
 		if err == nil || !strings.Contains(err.Error(), "max_input_bytes") {
 			t.Fatalf("input one byte over cap should fail, got: %v", err)
+		}
+	})
+}
+
+// TestMaxInputBytesIsHostOnly verifies the DoS byte cap cannot be disabled or
+// widened from a script: max_input_bytes is a HOST-ONLY config option, so base
+// generates no set_max_input_bytes builtin (a script that loads it fails). The
+// host keeps control through the read-only getter and the env var. (STAR-78)
+func TestMaxInputBytesIsHostOnly(t *testing.T) {
+	t.Run("set_max_input_bytes is not exposed to scripts", func(t *testing.T) {
+		err := runScript(t, `load("markdown", "set_max_input_bytes")`)
+		if err == nil {
+			t.Fatal("set_max_input_bytes must not be script-callable — a script could otherwise disable the DoS cap")
+		}
+	})
+
+	t.Run("get_max_input_bytes stays readable", func(t *testing.T) {
+		err := runScript(t, `
+load("markdown", "get_max_input_bytes")
+def check():
+    if get_max_input_bytes() <= 0:
+        fail("expected the default positive cap")
+check()
+`)
+		if err != nil {
+			t.Fatalf("get_max_input_bytes should remain available, got: %v", err)
+		}
+	})
+
+	t.Run("host env still enforces the cap", func(t *testing.T) {
+		t.Setenv("MARKDOWN_MAX_INPUT_BYTES", "8")
+		err := runScript(t, `
+load("markdown", "convert")
+def check():
+    convert(text="# this is well over eight bytes")
+check()
+`)
+		if err == nil || !strings.Contains(err.Error(), "max_input_bytes") {
+			t.Fatalf("host env cap must be enforced, got: %v", err)
 		}
 	})
 }
@@ -615,10 +638,13 @@ func TestNoHostPanic(t *testing.T) {
 	cases := []struct {
 		name string
 		// wantErr: the adversarial input must surface as a clean script error
-		// rather than a host panic (the big.Int cap). When false, the input must
-		// convert successfully and the in-script fail() assertions must hold.
+		// rather than a host panic. When false, the input must convert
+		// successfully and the in-script fail() assertions must hold.
 		wantErr bool
-		script  string
+		// capEnv, when set, is applied as MARKDOWN_MAX_INPUT_BYTES for the case
+		// (e.g. an oversized value the host cap parser must handle without panic).
+		capEnv string
+		script string
 	}{
 		{
 			name: "moderately deep blockquote nesting",
@@ -657,11 +683,15 @@ check()
 `,
 		},
 		{
-			name:    "oversized big.Int cap is a clean error",
-			wantErr: true,
+			name:   "oversized env cap does not crash the host",
+			capEnv: "999999999999999999999999999999",
 			script: `
-load("markdown", "set_max_input_bytes")
-set_max_input_bytes(999999999999999999999999999999)
+load("markdown", "convert")
+def check():
+    html = convert(text="# hi")
+    if "<h1" not in html:
+        fail("expected conversion under an oversized cap, got: " + html)
+check()
 `,
 		},
 		{
@@ -682,8 +712,11 @@ check()
 			// The invariant under test is "no host panic": a host panic would
 			// crash the test binary with a stack trace instead of the
 			// interpreter returning. Beyond that, we still assert the per-case
-			// expectation so the in-script fail() checks (and the big.Int
-			// clean-error claim) are actually enforced, not silently swallowed.
+			// expectation so the in-script fail() checks are actually enforced,
+			// not silently swallowed.
+			if tc.capEnv != "" {
+				t.Setenv("MARKDOWN_MAX_INPUT_BYTES", tc.capEnv)
+			}
 			err := runScript(t, tc.script)
 			if tc.wantErr {
 				if err == nil {
