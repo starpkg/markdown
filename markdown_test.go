@@ -627,6 +627,32 @@ check()
 	})
 }
 
+// TestMaxInputBytesResistsRuntimeSetenv is the end-to-end proof of the STAR-78
+// guarantee: even with starlet's runtime module (runtime.setenv) loaded next to
+// markdown, a script cannot re-widen the host cap by mutating the process
+// environment. base (>= v0.1.3) snapshots the host-only cap at construction, so
+// the runtime setenv is ignored and the cap still rejects oversized input.
+func TestMaxInputBytesResistsRuntimeSetenv(t *testing.T) {
+	// Host cap of 8 bytes, captured when NewModule constructs the module below.
+	t.Setenv("MARKDOWN_MAX_INPUT_BYTES", "8")
+	mod := markdown.NewModule()
+	interp := starlet.NewWithLoaders(nil, nil, starlet.ModuleLoaderMap{
+		"markdown": mod.LoadModule(),
+		"runtime":  starlet.GetBuiltinModule("runtime"),
+	})
+	_, err := interp.RunScript([]byte(`
+load("markdown", "convert")
+load("runtime", "setenv")
+def check():
+    setenv("MARKDOWN_MAX_INPUT_BYTES", "0")  # try to disable the cap at runtime
+    convert(text="# this is well over eight bytes")  # must still be rejected
+check()
+`), nil)
+	if err == nil || !strings.Contains(err.Error(), "max_input_bytes") {
+		t.Fatalf("cap must hold despite runtime.setenv widening the env, got: %v", err)
+	}
+}
+
 // TestNoHostPanic asserts the no-host-panic invariant adversarially: inputs that
 // could plausibly stress the renderer (deeply nested structures, malformed
 // markup, oversized cap values) must surface as a normal script error or finite

@@ -5,9 +5,10 @@ returns, and the configuration accessor exposed by the `markdown` module. For an
 overview, installation, and a quickstart, see the [README](../README.md).
 
 The module exposes two top-level builtins via `load("markdown", …)` — `convert`
-and `create_converter` — plus a configuration accessor pair (`get_<key>` /
-`set_<key>`) generated from the module's one option. `create_converter` hands
-back a callable named `custom_converter` with its rendering options frozen in.
+and `create_converter` — plus a read-only configuration accessor (`get_<key>`)
+generated from the module's one option. That option (`max_input_bytes`) is
+host-only, so no `set_<key>` setter is generated. `create_converter` hands back a
+callable named `custom_converter` with its rendering options frozen in.
 
 ## Contents
 
@@ -198,6 +199,9 @@ must stay in control of it. Only `get_max_input_bytes` is generated —
 **`set_max_input_bytes` is intentionally NOT exposed**, so a script cannot
 disable or widen the cap (e.g. `set_max_input_bytes(0)`). The host sets it in Go
 (the option default) or via the `MARKDOWN_MAX_INPUT_BYTES` environment variable.
+The cap value is snapshotted when the module is constructed, so a script cannot
+re-widen it at runtime by mutating the environment either (e.g. via a
+`runtime.setenv` builtin loaded alongside this module).
 
 | Option | Getter | Setter | Type | Env var | Default | Description |
 | --- | --- | --- | --- | --- | --- | --- |

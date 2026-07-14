@@ -63,11 +63,18 @@ file plus its test file.
     (`genCreateConverterFunc`). The base module system *also* generates a
     `get_max_input_bytes` accessor from the registered config option — but
     because the option is host-only, **no `set_max_input_bytes` setter is
-    generated** (a script can read the cap, never change it). The getter is
-    script-facing and documented in the README even though it is not declared in
-    this repo's source. (doccov's `-config` mode does not yet understand
-    host-only, so `set_max_input_bytes` is still kept as a backtick token in the
-    docs, framed as intentionally-absent — see STAR-93.)
+    generated** — a script cannot change the cap through this module's own API.
+    The getter is script-facing and documented in the README even though it is
+    not declared in this repo's source. (doccov's `-config` mode does not yet
+    understand host-only, so `set_max_input_bytes` is still kept as a backtick
+    token in the docs, framed as intentionally-absent — see STAR-93.)
+
+    The cap is also **not re-widenable via the environment at runtime**: base
+    v0.1.3 snapshots a host-only option's env var when the module is constructed
+    (before any script runs), so even a host that co-loads a module able to
+    mutate the process environment (e.g. starlet's `runtime.setenv`) does not let
+    a script `setenv("MARKDOWN_MAX_INPUT_BYTES", "0")` to disable the cap. Keep
+    the base pin at ≥ v0.1.3 for this guarantee.
   - `create_converter` returns a second builtin named **`custom_converter`**:
     a closure that takes a single positional Markdown **string** and renders it
     with the options captured at `create_converter` time.
