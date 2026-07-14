@@ -55,14 +55,26 @@ file plus its test file.
   - `Module` wraps a `base.ConfigurableModule` plus its `Extend()` view
     (`ConfigurableModuleExt`, used for typed config reads). `NewModule()`
     registers the one config option, `max_input_bytes`
-    (env `MARKDOWN_MAX_INPUT_BYTES`, default `5 << 20` = 5 MiB).
+    (env `MARKDOWN_MAX_INPUT_BYTES`, default `5 << 20` = 5 MiB), marked
+    **host-only** via `SetHostOnly(true)` — it is the DoS byte cap, so a script
+    must not be able to disable or widen it.
   - `LoadModule()` exposes two builtins via `base.ConfigurableModule.LoadModule`:
     **`convert`** (`genConvertFunc`) and **`create_converter`**
-    (`genCreateConverterFunc`). The base module system *also* auto-generates a
-    `get_max_input_bytes` / `set_max_input_bytes` getter/setter pair from the
-    registered config option — those are script-facing too, so they are
-    documented in the README even though they are not declared in this repo's
-    source.
+    (`genCreateConverterFunc`). The base module system *also* generates a
+    `get_max_input_bytes` accessor from the registered config option — but
+    because the option is host-only, **no `set_max_input_bytes` setter is
+    generated** — a script cannot change the cap through this module's own API.
+    The getter is script-facing and documented in the README even though it is
+    not declared in this repo's source. (doccov's `-config` mode does not yet
+    understand host-only, so `set_max_input_bytes` is still kept as a backtick
+    token in the docs, framed as intentionally-absent — see STAR-93.)
+
+    The cap is also **not re-widenable via the environment at runtime**: base
+    v0.1.3 snapshots a host-only option's env var when the module is constructed
+    (before any script runs), so even a host that co-loads a module able to
+    mutate the process environment (e.g. starlet's `runtime.setenv`) does not let
+    a script `setenv("MARKDOWN_MAX_INPUT_BYTES", "0")` to disable the cap. Keep
+    the base pin at ≥ v0.1.3 for this guarantee.
   - `create_converter` returns a second builtin named **`custom_converter`**:
     a closure that takes a single positional Markdown **string** and renders it
     with the options captured at `create_converter` time.

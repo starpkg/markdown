@@ -35,29 +35,17 @@ type Module struct {
 // NewModule creates a new instance of Module with default configurations.
 func NewModule() *Module {
 	cm, _ := base.NewConfigurableModuleWithConfigOptions(
-		genConfigOption(configKeyMaxInputBytes, "Maximum input size in bytes when converting", defaultMaxInputBytes),
+		// max_input_bytes is the DoS byte cap; it is HOST-ONLY, so base generates
+		// no set_max_input_bytes builtin — a script can neither disable nor widen
+		// the limit (only the Go host can, via the option default or the env var).
+		genConfigOption(configKeyMaxInputBytes, "Maximum input size in bytes when converting", defaultMaxInputBytes).
+			SetHostOnly(true),
 	)
 	return &Module{cfgMod: cm, ext: cm.Extend()}
 }
 
 func genConfigOption[T any](name, description string, defaultValue T) *base.ConfigOption[T] {
-	return base.NewConfigOption(defaultValue).
-		WithName(name).
-		WithDescription(description).
-		WithEnvVar("MARKDOWN_" + upper(name))
-}
-
-// upper uppercases an ASCII config-key name for the environment-variable prefix.
-func upper(s string) string {
-	out := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'a' && c <= 'z' {
-			c -= 'a' - 'A'
-		}
-		out[i] = c
-	}
-	return string(out)
+	return base.NewNamedConfigOption(ModuleName, name, description, defaultValue)
 }
 
 // LoadModule returns the Starlark module loader with markdown-specific functions.
