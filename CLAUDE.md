@@ -105,6 +105,19 @@ new safety lever must default to the historical behavior.
     goldmark `Convert` call in a deferred `recover()` that turns any renderer
     panic into a normal Go error (and thus a script-level error). Don't remove
     the recover; new render paths must route through this function.
+2b. **Bounded convert time (PKG-28).** `max_input_bytes` bounds input *size*, but
+    goldmark's nested block-quote / list parsing is ~O(n²), so an input well under
+    the byte cap can still spin the CPU uninterruptibly (goldmark renders
+    synchronously with no context support). `convertMarkdownToHTML` runs the
+    conversion in a goroutine and returns `errConvertTimeout` when a wall-clock
+    deadline trips — the thread context (via `base/util.OpContext`) plus, if
+    positive, the **host-only** `max_convert_time` (config /
+    `MARKDOWN_MAX_CONVERT_TIME`, default `0` = no module limit). Keep both convert
+    paths (`convert` and the `custom_converter` closure) routed through
+    `convertMarkdownToHTML`. The input is an immutable string, so nothing is shared
+    with an abandoned goroutine; **known limitation:** on timeout that goroutine
+    runs until goldmark finishes — a hard CPU bound needs an OS/sandbox limit.
+
 2. **Bounded input.** `checkInputSize` rejects input longer than
     `max_input_bytes` (when positive) *before* it reaches goldmark, so a hostile
     or buggy script can't feed an unbounded blob into the renderer. The default

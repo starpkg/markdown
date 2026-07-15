@@ -3,11 +3,13 @@ package markdown
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/1set/starlet"
 	"github.com/1set/starlet/dataconv/types"
 	"github.com/starpkg/base"
+	"github.com/starpkg/base/util"
 	"github.com/yuin/goldmark"
 	emoji "github.com/yuin/goldmark-emoji"
 	"github.com/yuin/goldmark/extension"
@@ -20,11 +22,22 @@ import (
 // ModuleName defines the expected name for this module when used in Starlark's load() function, e.g., load('markdown', 'convert')
 const ModuleName = "markdown"
 
-const configKeyMaxInputBytes = "max_input_bytes"
+const (
+	configKeyMaxInputBytes  = "max_input_bytes"
+	configKeyMaxConvertTime = "max_convert_time"
+)
 
 const defaultMaxInputBytes = 5 << 20 // 5 MiB
 
-var none = starlark.None
+// defaultMaxConvertTime bounds a single conversion's wall-clock time. 0 = no
+// module-level limit (the conversion is still bounded by the thread context
+// deadline, if the host set one). Default 0 keeps historical behavior.
+const defaultMaxConvertTime = 0.0
+
+var (
+	none              = starlark.None
+	errConvertTimeout = errors.New("markdown.convert: conversion exceeded the time limit")
+)
 
 // Module wraps the ConfigurableModule with specific functionality for markdown conversion.
 type Module struct {
@@ -39,6 +52,12 @@ func NewModule() *Module {
 		// no set_max_input_bytes builtin — a script can neither disable nor widen
 		// the limit (only the Go host can, via the option default or the env var).
 		genConfigOption(configKeyMaxInputBytes, "Maximum input size in bytes when converting", defaultMaxInputBytes).
+			SetHostOnly(true),
+		// max_convert_time bounds a single conversion's wall-clock time. goldmark's
+		// nested block-quote / list parsing is ~O(n²), so an input well under the
+		// byte cap can still hang the host; the byte cap doesn't bound parse
+		// complexity. HOST-ONLY: a script must not be able to disable the limit.
+		genConfigOption(configKeyMaxConvertTime, "Maximum wall-clock seconds for a single conversion (0 = no module limit)", defaultMaxConvertTime).
 			SetHostOnly(true),
 	)
 	return &Module{cfgMod: cm, ext: cm.Extend()}
@@ -133,19 +152,55 @@ func createMarkdownConverter(opts markdownOptions) goldmark.Markdown {
 	return goldmark.New(mdOptions...)
 }
 
-// convertMarkdownToHTML converts markdown text to HTML using the given converter,
-// recovering any goldmark panic into an error.
-func convertMarkdownToHTML(md goldmark.Markdown, text string) (s string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			s, err = "", fmt.Errorf("failed to convert markdown to HTML: convert panic: %v", r)
-		}
-	}()
-	var buf bytes.Buffer
-	if cerr := md.Convert([]byte(text), &buf); cerr != nil {
-		return "", fmt.Errorf("failed to convert markdown to HTML: %v", cerr)
+// convertMarkdownToHTML converts markdown text to HTML using the given
+// converter, bounded by a wall-clock deadline and recovering any goldmark panic
+// into an error.
+//
+// goldmark renders synchronously with no context support, and nested
+// block-quote / list parsing is ~O(n²), so a pathological input (well under the
+// byte cap) can spin uninterruptibly. It runs in a goroutine and the deadline —
+// the thread context (so a host/sandbox execution deadline is honored) plus, if
+// positive, max_convert_time — returns errConvertTimeout rather than wedging the
+// interpreter. NOTE: on timeout the abandoned goroutine keeps running until
+// goldmark finishes; a hard CPU bound requires an OS/sandbox limit. The input is
+// an immutable string, so nothing is shared with the abandoned goroutine.
+func convertMarkdownToHTML(thread *starlark.Thread, md goldmark.Markdown, text string, timeout float64) (string, error) {
+	ctx, cancel := util.OpContext(thread, util.DurationFromSeconds(timeout))
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return "", errConvertTimeout
 	}
-	return buf.String(), nil
+
+	type result struct {
+		out string
+		err error
+	}
+	ch := make(chan result, 1) // buffered so an abandoned goroutine never blocks
+	go func() {
+		var out string
+		var err error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					out, err = "", fmt.Errorf("failed to convert markdown to HTML: convert panic: %v", r)
+				}
+			}()
+			var buf bytes.Buffer
+			if cerr := md.Convert([]byte(text), &buf); cerr != nil {
+				out, err = "", fmt.Errorf("failed to convert markdown to HTML: %v", cerr)
+				return
+			}
+			out = buf.String()
+		}()
+		ch <- result{out, err}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.out, res.err
+	case <-ctx.Done():
+		return "", errConvertTimeout
+	}
 }
 
 // parseOptions unpacks the markdown options from Starlark values
@@ -218,7 +273,7 @@ func (m *Module) genConvertFunc() starlark.Callable {
 		}
 
 		// Convert markdown to HTML
-		html, err := convertMarkdownToHTML(md, text)
+		html, err := convertMarkdownToHTML(thread, md, text, m.maxConvertTime())
 		if err != nil {
 			return none, err
 		}
@@ -229,6 +284,10 @@ func (m *Module) genConvertFunc() starlark.Callable {
 
 // checkInputSize rejects input longer than the configured max_input_bytes
 // (when positive) before it reaches goldmark.
+func (m *Module) maxConvertTime() float64 {
+	return m.ext.GetFloat(configKeyMaxConvertTime, defaultMaxConvertTime)
+}
+
 func (m *Module) checkInputSize(text string) error {
 	if maxBytes := m.ext.GetInt(configKeyMaxInputBytes); maxBytes > 0 && len(text) > maxBytes {
 		return fmt.Errorf("%s.convert: input exceeds max_input_bytes (%d)", ModuleName, maxBytes)
@@ -293,7 +352,7 @@ func (m *Module) genCreateConverterFunc() starlark.Callable {
 			}
 
 			// Convert markdown to HTML
-			html, err := convertMarkdownToHTML(md, text)
+			html, err := convertMarkdownToHTML(thread, md, text, m.maxConvertTime())
 			if err != nil {
 				return none, err
 			}

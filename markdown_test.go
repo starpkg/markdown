@@ -754,3 +754,43 @@ check()
 		})
 	}
 }
+
+// TestConvertTimeBoundRejectsPathologicalInput exercises PKG-28: goldmark's
+// nested block-quote parsing is ~O(n²), so an input well under the byte cap can
+// spin. With a small max_convert_time the conversion is abandoned and returns a
+// time-limit error instead of wedging the interpreter. n=30000 takes hundreds of
+// ms locally (far above the 20ms cap; CI runners are slower, never faster), so
+// the timeout fires deterministically without CPU-timing flakiness.
+func TestConvertTimeBoundRejectsPathologicalInput(t *testing.T) {
+	t.Setenv("MARKDOWN_MAX_CONVERT_TIME", "0.02")
+	err := runScript(t, `
+load("markdown", "convert")
+def check():
+    convert(text=">" * 30000)  # O(n^2) nested block quotes
+check()
+`)
+	if err == nil || !strings.Contains(err.Error(), "time limit") {
+		t.Fatalf("expected a convert time-limit error, got: %v", err)
+	}
+}
+
+// TestMaxConvertTimeIsHostOnly verifies the DoS time lever cannot be disabled
+// from a script: no set_max_convert_time is generated (host-only), while the
+// getter remains.
+func TestMaxConvertTimeIsHostOnly(t *testing.T) {
+	t.Run("set_max_convert_time not exposed", func(t *testing.T) {
+		if err := runScript(t, `load("markdown", "set_max_convert_time")`); err == nil {
+			t.Fatal("set_max_convert_time must not be script-callable (host-only DoS lever)")
+		}
+	})
+	t.Run("get_max_convert_time present", func(t *testing.T) {
+		if err := runScript(t, `
+load("markdown", "get_max_convert_time")
+def check():
+    get_max_convert_time()
+check()
+`); err != nil {
+			t.Fatalf("get_max_convert_time should be available, got: %v", err)
+		}
+	})
+}
