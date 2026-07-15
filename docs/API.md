@@ -194,18 +194,26 @@ above):
 An option's value resolves in priority order: an explicit host value, the
 environment variable, then the default.
 
-`max_input_bytes` is a **host-only** option: it is the DoS byte cap, so the host
-must stay in control of it. Only `get_max_input_bytes` is generated —
-**`set_max_input_bytes` is intentionally NOT exposed**, so a script cannot
-disable or widen the cap (e.g. `set_max_input_bytes(0)`). The host sets it in Go
-(the option default) or via the `MARKDOWN_MAX_INPUT_BYTES` environment variable.
-The cap value is snapshotted when the module is constructed, so a script cannot
-re-widen it at runtime by mutating the environment either (e.g. via a
-`runtime.setenv` builtin loaded alongside this module).
+Both options are **host-only** DoS levers, so the host stays in control: only the
+getters (`get_max_input_bytes`, `get_max_convert_time`) are generated —
+**`set_max_input_bytes` and `set_max_convert_time` are intentionally NOT exposed**,
+so a script cannot disable or widen a limit (e.g. `set_max_input_bytes(0)`). The
+host sets them in Go (the option default) or via the `MARKDOWN_*` environment
+variables. Their values are snapshotted when the module is constructed, so a
+script cannot re-widen them at runtime by mutating the environment either (e.g.
+via a `runtime.setenv` builtin loaded alongside this module).
+
+`max_input_bytes` bounds input **size**, but goldmark's nested block-quote / list
+parsing is roughly **O(n²)** — an input well under the byte cap can still spin the
+CPU — so `max_convert_time` bounds a single conversion's wall-clock **time**
+(`0` = no module limit; the conversion is still bounded by the thread context
+deadline if the host set one). A conversion exceeding it returns a time-limit
+error.
 
 | Option | Getter | Setter | Type | Env var | Default | Description |
 | --- | --- | --- | --- | --- | --- | --- |
 | `max_input_bytes` | `get_max_input_bytes` | `set_max_input_bytes` — **host-only, not generated** | int | `MARKDOWN_MAX_INPUT_BYTES` | `5242880` | Maximum input size in bytes when converting (5 MiB); `0` disables the cap (host-set only) |
+| `max_convert_time` | `get_max_convert_time` | `set_max_convert_time` — **host-only, not generated** | float | `MARKDOWN_MAX_CONVERT_TIME` | `0` | Maximum wall-clock seconds for a single conversion; `0` = no module limit (still bounded by the thread context deadline) |
 
 Untrusted Markdown is bounded by this input-size cap before it reaches the
 renderer — input longer than `max_input_bytes` is rejected with a clean error

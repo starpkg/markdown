@@ -22,8 +22,10 @@ into HTML without reaching out to anything.
   reusable converter with rendering options frozen in.
 - **Secure by default** — raw HTML in the source is filtered out unless you
   opt in with `unsafe=True`, and renderer panics are recovered into errors.
-- **Bounded input** — a `max_input_bytes` cap rejects oversized input before it
-  reaches the renderer.
+- **Bounded work** — a `max_input_bytes` cap rejects oversized input before it
+  reaches the renderer, and a `max_convert_time` cap bounds a single conversion's
+  wall-clock time (goldmark's nested parsing is ~O(n²), so an input under the byte
+  cap can still spin). Both are host-only.
 
 For the complete per-builtin reference — signatures, parameters, returns,
 errors, examples — and the configuration accessors, see
@@ -102,17 +104,19 @@ Converter object:
 
 Configuration accessors:
 
-- `get_max_input_bytes()` — read the input-size cap. The cap is **host-only**: `set_max_input_bytes` is intentionally **not** exposed to scripts, so a script cannot disable or widen the DoS limit — only the host can, in Go or via the env var.
+- `get_max_input_bytes()` — read the input-size cap. **Host-only**: `set_max_input_bytes` is intentionally **not** exposed, so a script cannot disable or widen the DoS limit — only the host can, in Go or via the env var.
+- `get_max_convert_time()` — read the per-conversion wall-clock time cap (seconds; `0` = no module limit). Also **host-only**: no `set_max_convert_time`.
 
 See **[docs/API.md](docs/API.md)** for the full signatures, return values,
 errors, the shared rendering-option table, and examples of every builtin above.
 
 ## Configuration
 
-The module's one option, `max_input_bytes`, bounds untrusted input before it
-reaches the renderer; it is **host-only**, configured via the
-`MARKDOWN_MAX_INPUT_BYTES` environment variable or the Go host (a script can read
-it with `get_max_input_bytes` but cannot change it — `set_max_input_bytes` is not
+The module's options — `max_input_bytes` (input size) and `max_convert_time`
+(per-conversion wall-clock time; goldmark's nested parsing is ~O(n²) so size
+alone doesn't bound CPU) — are both **host-only**, configured via the
+`MARKDOWN_MAX_INPUT_BYTES` / `MARKDOWN_MAX_CONVERT_TIME` environment variables or
+the Go host (a script can read them with `get_max_input_bytes` but cannot change it — `set_max_input_bytes` is not
 generated). See the
 [Configuration section of docs/API.md](docs/API.md#configuration) for the full
 option table, default, accessors, and details.
