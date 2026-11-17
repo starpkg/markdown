@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`starpkg/markdown` is an **L4 domain module** of the Star\* ecosystem: it exposes
+`starpkg/markdown` is an **L3 domain module** of the Star\* ecosystem: it exposes
 Markdown-to-HTML conversion to Starlark scripts. A script loads the module and
 calls `convert(text=...)` to render Markdown straight to an HTML string, or
 `create_converter(...)` to build a reusable converter with options frozen in.
@@ -168,7 +168,7 @@ Three layers must stay in sync (enforced by the doc standard,
   correctness fixes, and recent goldmark releases raise their own Go floor, so
   the module relaxes its floor to match (a module may raise its floor when a
   dependency requires it — same rationale as the `email` module).
-- **CI matrix** = `[1.22.x, 1.25.x]` via the centralized reusable workflow in
+- **CI matrix** = `[1.22.x, 1.27.x]` via the centralized reusable workflow in
   `1set/meta` (pinned by commit SHA; bump the pin when meta's workflow changes).
 - **Bumping the version, the go floor, or tagging are user-confirmed actions** —
   never tag autonomously; default to patch bumps; published tags are immutable
